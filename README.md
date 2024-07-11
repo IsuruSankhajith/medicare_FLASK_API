@@ -64,3 +64,53 @@ from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import ReduceLROnPlateau
 from sklearn.model_selection import train_test_split
+
+
+## Function to Plot Model's Validation Loss and Validation Accuracy
+
+```python
+# Function to plot model's validation loss and validation accuracy
+def plot_model_history(model_history):
+    fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+    # summarize history for accuracy
+    axs[0].plot(range(1, len(model_history.history['acc']) + 1), model_history.history['acc'])
+    axs[0].plot(range(1, len(model_history.history['val_acc']) + 1), model_history.history['val_acc'])
+    axs[0].set_title('Model Accuracy')
+    axs[0].set_ylabel('Accuracy')
+    axs[0].set_xlabel('Epoch')
+    axs[0].set_xticks(np.arange(1, len(model_history.history['acc']) + 1, len(model_history.history['acc']) / 10))
+    axs[0].legend(['train', 'val'], loc='best')
+    # summarize history for loss
+    axs[1].plot(range(1, len(model_history.history['loss']) + 1), model_history.history['loss'])
+    axs[1].plot(range(1, len(model_history.history['val_loss']) + 1), model_history.history['val_loss'])
+    axs[1].set_title('Model Loss')
+    axs[1].set_ylabel('Loss')
+    axs[1].set_xlabel('Epoch')
+    axs[1].set_xticks(np.arange(1, len(model_history.history['loss']) + 1, len(model_history.history['loss']) / 10))
+    axs[1].legend(['train', 'val'], loc='best')
+    plt.show()
+
+    # Step 2 : Making Dictionary of images and labels
+In this step I have made the image path dictionary by joining the folder path from base directory base_skin_dir and merge the images in jpg format from both the folders HAM10000_images_part1.zip and HAM10000_images_part2.zip
+
+## Merging Images and Creating Dictionaries
+
+```python
+base_skin_dir = os.path.join('..', 'input')
+
+# Merging images from both folders HAM10000_images_part1.zip and HAM10000_images_part2.zip into one dictionary
+imageid_path_dict = {os.path.splitext(os.path.basename(x))[0]: x
+                     for x in glob(os.path.join(base_skin_dir, '*', '*.jpg'))}
+
+# This dictionary is useful for displaying more human-friendly labels later on
+lesion_type_dict = {
+    'nv': 'Melanocytic nevi',
+    'mel': 'Melanoma',
+    'bkl': 'Benign keratosis-like lesions',
+    'bcc': 'Basal cell carcinoma',
+    'akiec': 'Actinic keratoses',
+    'vasc': 'Vascular lesions',
+    'df': 'Dermatofibroma'
+}
+
+
