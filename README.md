@@ -33,8 +33,9 @@ In this kernel I have followed following 14 steps for model building and evaluat
 
 <img src="https://image.ibb.co/n8PBkL/cover.png">
 
-# Step 1 : importing Essential Libraries
+## Step 1: Importing Essential Libraries
 
+```python
 %matplotlib inline
 import matplotlib.pyplot as plt
 import numpy as np
@@ -43,7 +44,9 @@ import os
 from glob import glob
 import seaborn as sns
 from PIL import Image
+
 np.random.seed(123)
+
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import confusion_matrix
 import itertools
@@ -61,26 +64,3 @@ from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import ReduceLROnPlateau
 from sklearn.model_selection import train_test_split
-
-
-#1. Function to plot model's validation loss and validation accuracy
-def plot_model_history(model_history):
-    fig, axs = plt.subplots(1,2,figsize=(15,5))
-    # summarize history for accuracy
-    axs[0].plot(range(1,len(model_history.history['acc'])+1),model_history.history['acc'])
-    axs[0].plot(range(1,len(model_history.history['val_acc'])+1),model_history.history['val_acc'])
-    axs[0].set_title('Model Accuracy')
-    axs[0].set_ylabel('Accuracy')
-    axs[0].set_xlabel('Epoch')
-    axs[0].set_xticks(np.arange(1,len(model_history.history['acc'])+1),len(model_history.history['acc'])/10)
-    axs[0].legend(['train', 'val'], loc='best')
-    # summarize history for loss
-    axs[1].plot(range(1,len(model_history.history['loss'])+1),model_history.history['loss'])
-    axs[1].plot(range(1,len(model_history.history['val_loss'])+1),model_history.history['val_loss'])
-    axs[1].set_title('Model Loss')
-    axs[1].set_ylabel('Loss')
-    axs[1].set_xlabel('Epoch')
-    axs[1].set_xticks(np.arange(1,len(model_history.history['loss'])+1),len(model_history.history['loss'])/10)
-    axs[1].legend(['train', 'val'], loc='best')
-    plt.show()
-
