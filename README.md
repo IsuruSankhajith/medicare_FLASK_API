@@ -64,12 +64,12 @@ from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator
 from keras.callbacks import ReduceLROnPlateau
 from sklearn.model_selection import train_test_split
-
-
-## Function to Plot Model's Validation Loss and Validation Accuracy
+```
 
 ```python
-# Function to plot model's validation loss and validation accuracy
+
+## Function to plot model's validation loss and validation accuracy
+
 def plot_model_history(model_history):
     fig, axs = plt.subplots(1, 2, figsize=(15, 5))
     # summarize history for accuracy
@@ -89,8 +89,9 @@ def plot_model_history(model_history):
     axs[1].set_xticks(np.arange(1, len(model_history.history['loss']) + 1, len(model_history.history['loss']) / 10))
     axs[1].legend(['train', 'val'], loc='best')
     plt.show()
+    ```
 
-    # Step 2 : Making Dictionary of images and labels
+# Step 2 : Making Dictionary of images and labels
 In this step I have made the image path dictionary by joining the folder path from base directory base_skin_dir and merge the images in jpg format from both the folders HAM10000_images_part1.zip and HAM10000_images_part2.zip
 
 ## Merging Images and Creating Dictionaries
@@ -112,5 +113,6 @@ lesion_type_dict = {
     'vasc': 'Vascular lesions',
     'df': 'Dermatofibroma'
 }
+```
 
 
