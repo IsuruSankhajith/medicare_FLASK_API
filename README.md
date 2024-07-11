@@ -114,5 +114,51 @@ lesion_type_dict = {
     'df': 'Dermatofibroma'
 }
 ```
+# Step 3 : Reading & Processing data
 
+In this step we have read the csv by joining the path of image folder which is the base folder where all the images are placed named base_skin_dir.
+After that we made some new columns which is easily understood for later reference such as we have made column path which contains the image_id, cell_type which contains the short name of lesion type and at last we have made the categorical column cell_type_idx in which we have categorize the lesion type in to codes from 0 to 6
+
+## Loading Data and Creating New Columns
+
+```python
+skin_df = pd.read_csv(os.path.join(base_skin_dir, 'HAM10000_metadata.csv'))
+
+# Creating New Columns for better readability
+skin_df['path'] = skin_df['image_id'].map(imageid_path_dict.get)
+skin_df['cell_type'] = skin_df['dx'].map(lesion_type_dict.get) 
+skin_df['cell_type_idx'] = pd.Categorical(skin_df['cell_type']).codes
+```
+```
+# Now lets see the sample of tile_df to look on newly made columns
+skin_df.head()
+```
+# Step 4 : Data Cleaning
+In this step we check for Missing values and datatype of each field 
+
+```
+skin_df.isnull().sum()
+```
+As it is evident from the above that only age has null values which is 57 so we will fill the null values by their mean.
+```
+skin_df['age'].fillna((skin_df['age'].mean()), inplace=True)
+```
+Now, lets check the presence of null values  again
+
+```
+skin_df.isnull().sum()
+```
+```
+print(skin_df.dtypes)
+```
+# Step 5 : EDA
+In this we will explore different features of the dataset , their distrubtions and actual counts
+
+Plot to see distribution of 7 different classes of cell type
+
+```
+fig, ax1 = plt.subplots(1, 1, figsize= (10, 5))
+skin_df['cell_type'].value_counts().plot(kind='bar', ax=ax1)
+```
+Its seems from the above plot that in this dataset cell type Melanecytic nevi has very large number of instances in comparison to other cell types
 
