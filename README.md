@@ -1,4 +1,28 @@
 # Welcome to my Final year project- Melanoma Skin Cancer detection (backend)   
+
+## Running the API
+
+```bash
+pip install -r requirements.txt
+mysql -u root -p < schema.sql
+
+export DB_USER=... DB_PASSWORD=... DB_HOST=localhost DB_NAME=cancer_detection_project_db
+# Optional: values of x_train_mean / x_train_std printed during training (Step 8)
+export MODEL_TRAIN_MEAN=... MODEL_TRAIN_STD=...
+# Optional: CORS_ORIGINS=http://localhost:3000  HOST=0.0.0.0  PORT=12000  FLASK_DEBUG=1
+
+python api.py
+```
+
+| Endpoint | Method | Body | Response |
+|---|---|---|---|
+| `/signup` | POST | JSON `{username, password}` | `200` success, `400` username taken / missing fields |
+| `/login` | POST | JSON `{username, password}` | `200` success, `401` wrong credentials |
+| `/upload` | POST | multipart `file` (jpg/jpeg/jfif/png) | `{message: "Melanoma" \| "Non-Melanoma", prediction, confidence, melanoma_probability}` |
+| `/imageUpload` | GET/POST | multipart `image` | HTML test page |
+
+`prediction` is one of the 7 HAM10000 classes described below.
+
 Skin cancer is the most common human malignancy, is primarily diagnosed visually, beginning with an initial clinical screening and followed potentially by dermoscopic analysis, a biopsy and histopathological examination. Automated classification of skin lesions using images is a challenging task owing to the fine-grained variability in the appearance of skin lesions.
 
 This the **HAM10000 ("Human Against Machine with 10000 training images")** dataset.It consists of 10015 dermatoscopicimages which are released as a training set for academic machine learning purposes and are publiclyavailable through the ISIC archive. This benchmark dataset can be used for machine learning and for comparisons with human experts. 
@@ -312,7 +336,7 @@ Dropout is a regularization method, where a proportion of nodes in the layer are
 
 The Flatten layer is use to convert the final feature maps into a one single 1D vector. This flattening step is needed so that you can make use of fully connected layers after some convolutional/maxpool layers. It combines all the found local features of the previous convolutional layers.
 
-In the end i used the features in two fully-connected (Dense) layers which is just artificial an neural networks (ANN) classifier. In the last layer(Dense(10,activation="softmax")) the net outputs distribution of probability of each class.
+In the end i used the features in two fully-connected (Dense) layers which is just artificial an neural networks (ANN) classifier. In the last layer(Dense(7,activation="softmax")) the net outputs distribution of probability of each class.
 
 ```
 # Set the CNN model 

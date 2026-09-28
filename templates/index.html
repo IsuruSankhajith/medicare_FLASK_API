@@ -2,7 +2,9 @@
     <title>Upload new File</title>
     <h1>Upload new File</h1>
     <form method=post enctype=multipart/form-data>
-      <input type=file name=image>
+      <input type=file name=image accept="image/jpeg,image/png">
       <input type=submit value=Predict>
+        {% if prediction %}
         <h3>Prediction: {{prediction}}</h3>
+        {% endif %}
     </form>
