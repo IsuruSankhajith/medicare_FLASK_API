@@ -1,0 +1,6 @@
+flask>=2.3
+flask-cors>=4.0
+tensorflow>=2.12
+numpy
+pillow
+mysql-connector-python

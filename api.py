@@ -1,79 +1,150 @@
-import os
-import torch
-from flask import Flask, request, jsonify
-from flask import request
-from flask import render_template
-
-import pandas as pd
-import tensorflow as tf
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import image
 import io
-from PIL import Image
+import os
+
 import mysql.connector
+import numpy as np
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+from PIL import Image, UnidentifiedImageError
+from tensorflow.keras.models import load_model
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 
-CORS(app)
+# Reject uploads larger than 10 MB
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+
+# Comma separated list of allowed origins, e.g. "http://localhost:3000"
+CORS(app, origins=os.environ.get('CORS_ORIGINS', '*').split(','))
 
 model = load_model('model.h5')
-model.make_predict_function()
 
-data = pd.read_csv('HAM10000_metadata.csv')
+# Class order produced by pd.Categorical(skin_df['cell_type']).codes during training
+# (alphabetical order of the lesion type names)
+CLASS_NAMES = [
+    'Actinic keratoses',
+    'Basal cell carcinoma',
+    'Benign keratosis-like lesions',
+    'Dermatofibroma',
+    'Melanocytic nevi',
+    'Melanoma',
+    'Vascular lesions',
+]
+MELANOMA_INDEX = CLASS_NAMES.index('Melanoma')
 
-# MySQL Configuration
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="1998",
-    database="cancer_detection_project_db"
-)
+# Training normalised images with (x - x_train_mean) / x_train_std.
+# Set these to the values printed during training. If they are not set,
+# each image is standardised with its own mean and std as an approximation.
+TRAIN_MEAN = os.environ.get('MODEL_TRAIN_MEAN')
+TRAIN_STD = os.environ.get('MODEL_TRAIN_STD')
+
+# Training resized images with .resize((100, 75)) -> width 100, height 75
+IMAGE_SIZE = (100, 75)
+
+
+def get_db():
+    return mysql.connector.connect(
+        host=os.environ.get('DB_HOST', 'localhost'),
+        user=os.environ.get('DB_USER', 'root'),
+        password=os.environ.get('DB_PASSWORD', ''),
+        database=os.environ.get('DB_NAME', 'cancer_detection_project_db'),
+    )
+
+
+def get_credentials():
+    data = request.get_json(silent=True) or {}
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return None, None
+    return username, password
+
+
+def password_matches(stored, password):
+    # Hashed passwords created by /signup
+    if stored.startswith(('pbkdf2:', 'scrypt:')):
+        return check_password_hash(stored, password)
+    # Legacy rows stored in plain text before hashing was added
+    return stored == password
+
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    username = data['username']
-    password = data['password']
+    username, password = get_credentials()
+    if username is None:
+        return jsonify({"message": "Username and password are required"}), 400
 
-    cursor = db.cursor()
+    db = get_db()
+    try:
+        cursor = db.cursor()
+        cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        cursor.close()
+    finally:
+        db.close()
 
-    cursor.execute("SELECT * FROM users WHERE username = %s AND password = %s", (username, password))
-    user = cursor.fetchone()
-
-    if user:
+    if user and password_matches(user[0], password):
         return jsonify({"message": "Login successful", "username": username})
-    else:
-        return jsonify({"message": "Login failed"})
+    return jsonify({"message": "Login failed"}), 401
+
 
 # Define a route for user signup
 @app.route('/signup', methods=['POST'])
 def signup():
-    data = request.get_json()
-    username = data['username']
-    password = data['password']
+    username, password = get_credentials()
+    if username is None:
+        return jsonify({"message": "Username and password are required"}), 400
 
-    cursor = db.cursor()
+    db = get_db()
+    try:
+        cursor = db.cursor()
 
-    # Check if the username is already taken
-    cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-    existing_user = cursor.fetchone()
+        # Check if the username is already taken
+        cursor.execute("SELECT 1 FROM users WHERE username = %s", (username,))
+        if cursor.fetchone():
+            cursor.close()
+            return jsonify({"message": "Username already exists"}), 400
 
-    if existing_user:
-        return jsonify({"message": "Username already exists"}), 400
-
-    # Insert the new user into the database
-    cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, password))
-    db.commit()
+        # Insert the new user into the database
+        cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)",
+                       (username, generate_password_hash(password)))
+        db.commit()
+        cursor.close()
+    finally:
+        db.close()
 
     return jsonify({"message": "Signup successful"})
 
-# Specify the directory to store uploaded images
-ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'jfif'}
+
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'jfif', 'png'}
+
 
 # Function to check if a file extension is allowed
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def preprocess(img_bytes):
+    img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
+    img = img.resize(IMAGE_SIZE)
+    img = np.asarray(img, dtype=np.float32)  # shape (75, 100, 3)
+    if TRAIN_MEAN is not None and TRAIN_STD is not None:
+        img = (img - float(TRAIN_MEAN)) / float(TRAIN_STD)
+    else:
+        img = (img - img.mean()) / (img.std() + 1e-7)
+    return img[np.newaxis, ...]
+
+
+def predict(img_bytes):
+    probabilities = model.predict(preprocess(img_bytes))[0]
+    best = int(np.argmax(probabilities))
+    return {
+        "message": 'Melanoma' if best == MELANOMA_INDEX else 'Non-Melanoma',
+        "prediction": CLASS_NAMES[best],
+        "confidence": float(probabilities[best]),
+        "melanoma_probability": float(probabilities[MELANOMA_INDEX]),
+    }
+
 
 # Define the image upload route
 @app.route('/upload', methods=['POST'])
@@ -92,60 +163,28 @@ def upload_image():
     if not allowed_file(file.filename):
         return jsonify({"message": "Invalid file type"}), 400
 
-    # Read image data from the FileStorage object
-    img_bytes = file.read()
+    try:
+        result = predict(file.read())
+    except UnidentifiedImageError:
+        return jsonify({"message": "Invalid image"}), 400
 
-    # Convert image data to a PIL image
-    img = image.load_img(io.BytesIO(img_bytes), target_size=(224, 224))
+    return jsonify(result)
 
-    # Preprocess the image
-    # img = image.load_img(image_file, target_size=(224, 224))
-    img = Image.open(io.BytesIO(img_bytes))
-    img = img.resize((75, 100))
-    img = image.img_to_array(img)
-    img = img / 255.0  # Normalize the image
-    img = img.reshape((1, 75, 100, 3))
-
-    # Make predictions using your model
-    predictions = model.predict(img)
-    class_name = 'Melanoma' if predictions[0][0] < 0.015 else 'Non-Melanoma'
-
-    return jsonify({"message": class_name})
 
 @app.route("/imageUpload", methods=["GET", "POST"])
 def upload_predict():
     if request.method == "POST":
-        image_file = request.files["image"]
-        if image_file:
-            # image_location = os.path.join(
-            #     UPLOAD_FOLDER,
-            #     image_file.filename
-            # )
-            # image_file.save(image_location)
-
-            # Read image data from the FileStorage object
-            img_bytes = image_file.read()
-
-            # Convert image data to a PIL image
-            img = image.load_img(io.BytesIO(img_bytes), target_size=(224, 224))
-
-            # Preprocess the image
-            # img = image.load_img(image_file, target_size=(224, 224))
-            img = Image.open(io.BytesIO(img_bytes))
-            img = img.resize((75, 100))
-            img = image.img_to_array(img)
-            img = img / 255.0  # Normalize the image
-            img = img.reshape((1, 75, 100, 3))
-
-            # Make predictions using your model
-            predictions = model.predict(img)
-            class_name = 'Melanoma' if predictions[0][0] < 0.015 else 'Non-Melanoma'
-
-            return render_template("index.html", prediction=class_name)
-    return render_template("index.html", prediction=0)
+        image_file = request.files.get("image")
+        if image_file and image_file.filename:
+            try:
+                result = predict(image_file.read())
+            except UnidentifiedImageError:
+                return render_template("index.html", prediction="Invalid image"), 400
+            return render_template("index.html", prediction=result["prediction"])
+    return render_template("index.html", prediction=None)
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=12000, debug=True)
-
-    
+    app.run(host=os.environ.get('HOST', '127.0.0.1'),
+            port=int(os.environ.get('PORT', 12000)),
+            debug=os.environ.get('FLASK_DEBUG') == '1')
